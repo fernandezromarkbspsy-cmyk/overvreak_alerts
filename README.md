@@ -136,11 +136,23 @@ curl -X POST http://localhost:5000/send-test-message \
 
 The bot expects these named ranges/sheets:
 
+### Required Tabs
+
+| Tab Name | Purpose | Columns |
+|----------|---------|---------|
+| `workstation_dump` | Monitored data range | A-G (varies) |
+| `[do_not_edit] attendance_timein_data` | Timestamp and count data | N2, N4 |
+| `Ops _id list of Overbreak` | Ops IDs for alerts | M6, O6 |
+| **groupid** | Stores bot group IDs | A=group_id, B=group_name, C=added_at |
+
+### Required Ranges
+
 - `workstation_dump!A3:G3` - Monitored range for new data
 - `[do_not_edit] attendance_timein_data!N2` - Timestamp cell
 - `[do_not_edit] attendance_timein_data!N4` - Overbreak count cell
 - `Ops _id list of Overbreak!M6` - First ops ID
 - `Ops _id list of Overbreak!O6` - Second ops ID
+- `groupid!A:C` - Group storage (auto-populated when bot joins groups)
 
 ## Architecture
 
