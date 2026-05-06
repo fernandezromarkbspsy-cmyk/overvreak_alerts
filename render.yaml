@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: seatalk-overbreak-bot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT seatalk_bot:app
+    envVars:
+      - key: SEATALK_APP_ID
+        sync: false
+      - key: SEATALK_APP_SECRET
+        sync: false
+      - key: SEATALK_ACCESS_TOKEN
+        sync: false
+        value: ""
+      - key: SEATALK_SIGNING_SECRET
+        sync: false
+        value: ""
+      - key: SEATALK_GROUP_ID
+        sync: false
+        value: ""
+      - key: GOOGLE_SHEET_ID
+        value: "1uiy0hKwchm_SdfjTqk6IygZLArYuDnpBI45y1__pSNA"
+      - key: GOOGLE_SERVICE_ACCOUNT_FILE
+        value: "google-service-account.json"
+      - key: CHECK_INTERVAL_SECONDS
+        value: "30"
+      - key: DELAY_BEFORE_SEND_SECONDS
+        value: "5"
+      - key: CC_USER_IDS
+        value: "1188946190,1495447455,1503543331"
+      - key: PYTHON_VERSION
+        value: "3.11"
+    disk:
+      name: data
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
