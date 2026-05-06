@@ -166,8 +166,8 @@ secrets.env
 config.env
 
 # Application data (runtime generated)
-groups.json
-groups_backup.json
+groupid
+groupid_backup.json
 
 # Local databases
 data/

@@ -1,0 +1,7 @@
+{
+  "group_ids": [
+    "1210342498"
+  ],
+  "count": 1,
+  "note": "Copy this ID to your .env file: SEATALK_GROUP_ID=1210342498"
+}

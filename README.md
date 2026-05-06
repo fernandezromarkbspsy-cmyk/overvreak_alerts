@@ -60,9 +60,9 @@ Required variables:
    - URL: `https://your-server.com/webhook`
    - Copy the **Signing Secret** to your `.env` file
 4. Add the bot to your target group chat
-5. The bot will automatically store the group ID in `groups.json`
+5. The bot will automatically store the group ID in the **"groupid" sheet tab**
 
-**Note**: The bot will automatically detect when it's added to a group and store the `group_id` locally. You can omit `SEATALK_GROUP_ID` from `.env` if the bot auto-joins the group.
+**Note**: The bot will automatically detect when it's added to a group and store the `group_id` in the Google Sheet. You can omit `SEATALK_GROUP_ID` from `.env` if the bot auto-joins the group.
 
 ### 4. Configure Google Sheets
 
@@ -92,7 +92,7 @@ The server will start on port 5000 by default.
 
 When the bot is added to a group chat, the `bot_added_to_group_chat` webhook triggers and the bot:
 1. Calls the **Get Group Info API** to fetch full group details
-2. Stores the group info in `groups.json`
+2. Stores the group info in the **"groupid" sheet tab** (columns: A=group_id, B=group_name, C=added_at)
 3. Auto-configures `group_id` if not already set
 
 **Stored Group Info:**

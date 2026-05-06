@@ -236,31 +236,53 @@ class SeaTalkClient:
 
 
 class GroupStorage:
-    """Manages storage of group information in a local JSON file."""
+    """Manages storage of group information in Google Sheets tab 'groupid'."""
     
-    STORAGE_FILE = "groups.json"
+    SHEET_NAME = "groupid"
+    SHEET_RANGE = "groupid!A:C"  # A: group_id, B: group_name, C: added_at
     
-    def __init__(self):
+    def __init__(self, sheets_client: GoogleSheetsClient, sheet_id: str):
+        self.sheets = sheets_client
+        self.sheet_id = sheet_id
         self.groups = self._load_groups()
     
     def _load_groups(self) -> Dict[str, Any]:
-        """Load groups from local storage file."""
-        if os.path.exists(self.STORAGE_FILE):
-            try:
-                with open(self.STORAGE_FILE, 'r') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.error(f"Error loading groups file: {e}")
-        return {"groups": []}
+        """Load groups from Google Sheets 'groupid' tab."""
+        try:
+            values = self.sheets.get_values(self.SHEET_RANGE)
+            groups = []
+            if values and len(values) > 1:  # Skip header row
+                for row in values[1:]:  # Skip header
+                    if len(row) >= 1 and row[0]:
+                        group = {
+                            "group_id": row[0],
+                            "group_name": row[1] if len(row) > 1 else "",
+                            "added_at": row[2] if len(row) > 2 else ""
+                        }
+                        groups.append(group)
+            logger.info(f"Loaded {len(groups)} groups from sheet tab '{self.SHEET_NAME}'")
+            return {"groups": groups}
+        except Exception as e:
+            logger.error(f"Error loading groups from sheet: {e}")
+            return {"groups": []}
     
     def _save_groups(self):
-        """Save groups to local storage file."""
+        """Save groups to Google Sheets 'groupid' tab."""
         try:
-            with open(self.STORAGE_FILE, 'w') as f:
-                json.dump(self.groups, f, indent=2)
-            logger.info(f"Groups saved to {self.STORAGE_FILE}")
+            # Prepare data with header
+            values = [["group_id", "group_name", "added_at"]]
+            for group in self.groups.get("groups", []):
+                values.append([
+                    group.get("group_id", ""),
+                    group.get("group_name", ""),
+                    group.get("added_at", "")
+                ])
+            
+            # Clear and update range
+            self.sheets.update_values(f"{self.SHEET_NAME}!A1", values)
+            logger.info(f"Groups saved to sheet tab '{self.SHEET_NAME}'")
         except Exception as e:
-            logger.error(f"Error saving groups file: {e}")
+            logger.error(f"Error saving groups to sheet: {e}")
     
     def add_group(self, group_info: Dict[str, Any]):
         """Add or update a group in storage."""
@@ -318,8 +340,17 @@ scheduler_running = False
 def init_monitor():
     """Initialize the monitor and group storage."""
     global monitor, group_storage
-    group_storage = GroupStorage()
-    monitor = OverbreakMonitor()
+    
+    # Create sheets client first (needed for GroupStorage)
+    sheet_id = os.getenv('GOOGLE_SHEET_ID')
+    service_account_file = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', 'google-service-account.json')
+    sheets_client = GoogleSheetsClient(service_account_file, sheet_id)
+    
+    # Initialize GroupStorage with sheets client
+    group_storage = GroupStorage(sheets_client, sheet_id)
+    
+    # Initialize OverbreakMonitor (reuses sheets_client)
+    monitor = OverbreakMonitor(sheets_client)
     logger.info("OverbreakMonitor and GroupStorage initialized.")
 
 
@@ -333,12 +364,8 @@ class OverbreakMonitor:
     OPS_ID_CELL_1 = "Ops _id list of Overbreak!M6"
     OPS_ID_CELL_2 = "Ops _id list of Overbreak!O6"
     
-    def __init__(self):
+    def __init__(self, sheets_client: GoogleSheetsClient = None):
         self.sheet_id = os.getenv('GOOGLE_SHEET_ID')
-        self.service_account_file = os.getenv(
-            'GOOGLE_SERVICE_ACCOUNT_FILE', 
-            'google-service-account.json'
-        )
         self.seatalk_app_id = os.getenv('SEATALK_APP_ID')
         self.seatalk_app_secret = os.getenv('SEATALK_APP_SECRET')
         self.seatalk_token = os.getenv('SEATALK_ACCESS_TOKEN')
@@ -361,10 +388,13 @@ class OverbreakMonitor:
         
         self.delay_seconds = int(os.getenv('DELAY_BEFORE_SEND_SECONDS', '5'))
         
-        self.sheets_client = GoogleSheetsClient(
-            self.service_account_file, 
-            self.sheet_id
-        )
+        # Use provided sheets_client or create new one
+        if sheets_client:
+            self.sheets_client = sheets_client
+        else:
+            service_account_file = os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE', 'google-service-account.json')
+            self.sheets_client = GoogleSheetsClient(service_account_file, self.sheet_id)
+            
         self.seatalk_client = SeaTalkClient(
             self.seatalk_app_id,
             self.seatalk_app_secret,
