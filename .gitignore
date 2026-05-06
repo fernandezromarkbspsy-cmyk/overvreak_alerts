@@ -274,3 +274,4 @@ yarn-error.log*
 # IDE
 *.sublime-*
 *.code-workspace
+google-service-account.json
