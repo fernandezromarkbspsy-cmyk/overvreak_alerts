@@ -78,60 +78,6 @@ python seatalk_bot.py
 
 The server will start on port 5000 by default.
 
-## Deploy to Render
-
-### Option 1: Deploy via Blueprint (Recommended)
-
-1. Push code to GitHub
-2. Go to [Render Dashboard](https://dashboard.render.com/)
-3. Click **New +** → **Blueprint**
-4. Connect your GitHub repo
-5. Render will auto-detect `render.yaml` and configure the service
-
-### Option 2: Manual Web Service
-
-1. Push code to GitHub
-2. In Render Dashboard: **New +** → **Web Service**
-3. Connect your repo
-4. Configure:
-   - **Name**: `seatalk-overbreak-bot`
-   - **Runtime**: Python 3
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn -w 2 -b 0.0.0.0:$PORT seatalk_bot:app`
-5. Add Environment Variables (see table below)
-
-### Required Environment Variables on Render
-
-| Variable | Value | Secret? |
-|----------|-------|---------|
-| `SEATALK_APP_ID` | Your app ID | ✅ |
-| `SEATALK_APP_SECRET` | Your app secret | ✅ |
-| `SEATALK_SIGNING_SECRET` | Webhook signing secret | ✅ |
-| `GOOGLE_SHEET_ID` | `1uiy0hKwchm_SdfjTqk6IygZLArYuDnpBI45y1__pSNA` | |
-| `GOOGLE_SERVICE_ACCOUNT_FILE` | `google-service-account.json` | |
-| `CC_USER_IDS` | `1188946190,1495447455,1503543331` | |
-
-### Google Service Account on Render
-
-Since `google-service-account.json` is in `.gitignore` (for security), you need to set the `GOOGLE_SERVICE_ACCOUNT_JSON` environment variable:
-
-1. Open `google-service-account.json` locally
-2. Copy the **entire JSON content** (e.g., `{"type":"service_account",...}`)
-3. In Render Dashboard → Environment Variables
-4. Add: `GOOGLE_SERVICE_ACCOUNT_JSON` = [paste the full JSON]
-5. Mark as **Secret** (checkbox)
-
-The bot will automatically use `GOOGLE_SERVICE_ACCOUNT_JSON` if set, otherwise falls back to the file.
-
-### Webhook URL on Render
-
-After deployment, your webhook URL will be:
-```
-https://seatalk-overbreak-bot.onrender.com/webhook
-```
-
-Add this to SeaTalk Open Platform → Event Callback.
-
 ## API Endpoints
 
 | Endpoint | Method | Description |
@@ -185,33 +131,6 @@ curl -X POST http://localhost:5000/send-test-message \
   -H "Content-Type: application/json" \
   -d '{"message": "Test message"}'
 ```
-
-## Webhook Events Handled
-
-The bot handles these SeaTalk events (per [Event Callback](seatalk_docs/Event%20Callback.md) docs):
-
-| Event | Description |
-|-------|-------------|
-| `event_verification` | URL verification challenge - required for webhook setup |
-| `bot_added_to_group_chat` | Stores group info in `groups.json` |
-| `bot_removed_from_group_chat` | Removes group from storage, switches to another if available |
-| `new_mentioned_message_received_from_group_chat` | Logs when bot is @mentioned |
-| `new_bot_subscriber` | Logs when user starts 1-on-1 chat with bot |
-| `message_from_bot_subscriber` | Logs messages from 1-on-1 chats |
-| `interactive_message_click` | Logs button clicks on interactive messages |
-
-### Webhook Security
-
-The bot verifies webhook signatures using the **Signing Secret** from SeaTalk:
-
-```python
-# Verification per Event Callback docs
-hashlib.sha256(body + signing_secret).hexdigest() == signature
-```
-
-To enable:
-1. Get your Signing Secret from SeaTalk Open Platform → Event Callback
-2. Add to `.env`: `SEATALK_SIGNING_SECRET=your_secret`
 
 ## Sheet Structure
 

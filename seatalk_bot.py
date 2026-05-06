@@ -312,6 +312,7 @@ class GroupStorage:
 
 monitor = None
 group_storage = None
+scheduler_running = False
 
 
 def init_monitor():
@@ -717,12 +718,33 @@ def list_groups():
     return jsonify({"error": "GroupStorage not initialized"}), 500
 
 
+# Initialize on first request (for gunicorn/production)
+@app.before_request
+def initialize_on_first_request():
+    """Lazy initialization for gunicorn workers."""
+    global monitor, group_storage, scheduler_running
+    if monitor is None or group_storage is None:
+        logger.info("Lazy initializing monitor and group_storage...")
+        init_monitor()
+    
+    # Start scheduler only once
+    if not scheduler_running:
+        logger.info("Starting scheduler thread...")
+        scheduler_running = True
+        scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+        scheduler_thread.start()
+
+
 def main():
     """Main entry point."""
+    global scheduler_running
+    
     init_monitor()
     
-    scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
-    scheduler_thread.start()
+    if not scheduler_running:
+        scheduler_running = True
+        scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+        scheduler_thread.start()
     
     port = int(os.getenv('PORT', '5000'))
     debug = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
