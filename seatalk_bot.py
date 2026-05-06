@@ -358,7 +358,7 @@ class OverbreakMonitor:
     """Monitors Google Sheets for overbreak data and sends SeaTalk alerts."""
     
     # Sheet ranges
-    WORKSTATION_DUMP_RANGE = "workstation_dump!A3:G3"
+    WORKSTATION_DUMP_RANGE = "workstation_dump!A3:I3"
     TIMESTAMP_CELL = "[do_not_edit] attendance_timein_data!N2"
     OVERBREAK_COUNT_CELL = "[do_not_edit] attendance_timein_data!N4"
     OPS_ID_CELL_1 = "Ops _id list of Overbreak!M6"
@@ -442,15 +442,11 @@ cc: {mentions}"""
             self.WORKSTATION_DUMP_RANGE
         )
         
-        if has_data and not self.last_check_had_data:
-            logger.info("New data detected! Processing...")
+        if has_data:
+            logger.info("Data detected in workstation_dump! Processing...")
             self._process_new_data()
-        elif has_data and self.last_check_had_data:
-            logger.info("Data still present, already processed.")
         else:
             logger.info("No data detected in workstation_dump.")
-            
-        self.last_check_had_data = has_data
     
     def _process_new_data(self):
         """Process new data: add timestamp, wait, then send message."""
