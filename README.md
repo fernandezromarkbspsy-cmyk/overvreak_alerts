@@ -60,7 +60,7 @@ Required variables:
    - URL: `https://your-server.com/webhook`
    - Copy the **Signing Secret** to your `.env` file
 4. Add the bot to your target group chat
-5. The bot will automatically store the group ID in the **"groupid" sheet tab**
+5. The bot will automatically store the group ID in the **"group_id" sheet tab**
 
 **Note**: The bot will automatically detect when it's added to a group and store the `group_id` in the Google Sheet. You can omit `SEATALK_GROUP_ID` from `.env` if the bot auto-joins the group.
 
@@ -92,7 +92,7 @@ The server will start on port 5000 by default.
 
 When the bot is added to a group chat, the `bot_added_to_group_chat` webhook triggers and the bot:
 1. Calls the **Get Group Info API** to fetch full group details
-2. Stores the group info in the **"groupid" sheet tab** (columns: A=group_id, B=group_name, C=added_at)
+2. Stores the group info in the **"group_id" sheet tab** (columns: A=group_id, B=group_name, C=added_at)
 3. Auto-configures `group_id` if not already set
 
 **Stored Group Info:**
@@ -143,7 +143,7 @@ The bot expects these named ranges/sheets:
 | `workstation_dump` | Monitored data range | A-G (varies) |
 | `[do_not_edit] attendance_timein_data` | Timestamp and count data | N2, N4 |
 | `Ops _id list of Overbreak` | Ops IDs for alerts | M6, O6 |
-| **groupid** | Stores bot group IDs | A=group_id, B=group_name, C=added_at |
+| **group_id** | Stores bot group IDs and alert targets | A2:A=group_id, B=group_name, C=added_at |
 
 ### Required Ranges
 
@@ -152,7 +152,9 @@ The bot expects these named ranges/sheets:
 - `[do_not_edit] attendance_timein_data!N4` - Overbreak count cell
 - `Ops _id list of Overbreak!M6` - First ops ID
 - `Ops _id list of Overbreak!O6` - Second ops ID
-- `groupid!A:C` - Group storage (auto-populated when bot joins groups)
+- `group_id!A2:A` - Target group IDs for alert delivery
+- `Ops _id list of Overbreak!P2:P50` - No Breaktime Scan in FMS Workstation message data
+- `Ops _id list of Overbreak!R2:R50` - Ongoing Breaktime message data
 
 ## Architecture
 

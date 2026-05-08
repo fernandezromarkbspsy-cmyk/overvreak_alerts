@@ -108,6 +108,24 @@ class GoogleSheetsClient:
         except Exception as e:
             logger.error(f"Error updating {range_name}: {e}")
             return False
+
+    def update_values(self, range_name: str, values: List[List[str]]) -> bool:
+        """Update a range with multiple rows."""
+        try:
+            body = {
+                'values': values
+            }
+            self.sheets.values().update(
+                spreadsheetId=self.sheet_id,
+                range=range_name,
+                valueInputOption='RAW',
+                body=body
+            ).execute()
+            logger.info(f"Updated {range_name} with {len(values)} rows")
+            return True
+        except Exception as e:
+            logger.error(f"Error updating {range_name}: {e}")
+            return False
     
     def is_range_not_empty(self, range_name: str) -> bool:
         """Check if a range has any non-empty values."""
@@ -236,10 +254,10 @@ class SeaTalkClient:
 
 
 class GroupStorage:
-    """Manages storage of group information in Google Sheets tab 'groupid'."""
+    """Manages storage of group information in Google Sheets tab 'group_id'."""
     
-    SHEET_NAME = "groupid"
-    SHEET_RANGE = "groupid!A:C"  # A: group_id, B: group_name, C: added_at
+    SHEET_NAME = "group_id"
+    SHEET_RANGE = "group_id!A2:C"  # A: group_id, B: group_name, C: added_at
     
     def __init__(self, sheets_client: GoogleSheetsClient, sheet_id: str):
         self.sheets = sheets_client
@@ -247,15 +265,15 @@ class GroupStorage:
         self.groups = self._load_groups()
     
     def _load_groups(self) -> Dict[str, Any]:
-        """Load groups from Google Sheets 'groupid' tab."""
+        """Load groups from Google Sheets 'group_id' tab."""
         try:
             values = self.sheets.get_values(self.SHEET_RANGE)
             groups = []
-            if values and len(values) > 1:  # Skip header row
-                for row in values[1:]:  # Skip header
+            if values:
+                for row in values:
                     if len(row) >= 1 and row[0]:
                         group = {
-                            "group_id": row[0],
+                            "group_id": row[0].strip(),
                             "group_name": row[1] if len(row) > 1 else "",
                             "added_at": row[2] if len(row) > 2 else ""
                         }
@@ -267,7 +285,7 @@ class GroupStorage:
             return {"groups": []}
     
     def _save_groups(self):
-        """Save groups to Google Sheets 'groupid' tab."""
+        """Save groups to Google Sheets 'group_id' tab."""
         try:
             # Prepare data with header
             values = [["group_id", "group_name", "added_at"]]
@@ -313,6 +331,21 @@ class GroupStorage:
     def get_all_groups(self) -> List[Dict[str, Any]]:
         """Get all stored groups."""
         return self.groups.get("groups", [])
+
+    def refresh(self):
+        """Reload groups from the sheet."""
+        self.groups = self._load_groups()
+
+    def get_group_ids(self) -> List[str]:
+        """Get all non-empty group IDs from storage."""
+        group_ids = []
+        seen = set()
+        for group in self.get_all_groups():
+            group_id = group.get('group_id', '').strip()
+            if group_id and group_id not in seen:
+                group_ids.append(group_id)
+                seen.add(group_id)
+        return group_ids
     
     def get_primary_group_id(self) -> Optional[str]:
         """Get the first/primary group ID from storage."""
@@ -363,12 +396,15 @@ class OverbreakMonitor:
     OVERBREAK_COUNT_CELL = "[do_not_edit] attendance_timein_data!N4"
     OPS_ID_CELL_1 = "Ops _id list of Overbreak!M6"
     OPS_ID_CELL_2 = "Ops _id list of Overbreak!O6"
+    NO_BREAKTIME_SCAN_RANGE = "Ops _id list of Overbreak!P2:P50"
+    ONGOING_BREAKTIME_RANGE = "Ops _id list of Overbreak!R2:R50"
     
     def __init__(self, sheets_client: GoogleSheetsClient = None):
         self.sheet_id = os.getenv('GOOGLE_SHEET_ID')
         self.seatalk_app_id = os.getenv('SEATALK_APP_ID')
         self.seatalk_app_secret = os.getenv('SEATALK_APP_SECRET')
         self.seatalk_token = os.getenv('SEATALK_ACCESS_TOKEN')
+        self.group_id = None
         
         # Use env group_id or fall back to stored primary group
         env_group_id = os.getenv('SEATALK_GROUP_ID')
@@ -426,6 +462,65 @@ as of {timestamp}
 
 cc: {mentions}"""
         return message
+
+    def _get_range_lines(self, range_name: str) -> List[str]:
+        """Return non-empty cell values from a sheet range as lines."""
+        values = self.sheets_client.get_values(range_name)
+        lines = []
+        if not values:
+            return lines
+
+        for row in values:
+            for cell in row:
+                cell_value = cell.strip() if cell else ""
+                if cell_value:
+                    lines.append(cell_value)
+        return lines
+
+    def _build_range_message(self, title: str, range_name: str) -> str:
+        """Build a bold-title message from a single-column range."""
+        mentions = self._format_mentions(self.cc_user_ids)
+        lines = self._get_range_lines(range_name)
+        message = f"**{title}**"
+        if lines:
+            message += "\n" + "\n".join(lines)
+        else:
+            message += "\nNone"
+        message += f"\n\ncc: {mentions}"
+        return message
+
+    def _get_target_group_ids(self) -> List[str]:
+        """Get all target group IDs from group_id!A2:A, with env fallback."""
+        if group_storage:
+            group_storage.refresh()
+            group_ids = group_storage.get_group_ids()
+            if group_ids:
+                return group_ids
+
+        if self.group_id:
+            return [self.group_id]
+        return []
+
+    def _send_messages_to_all_groups(self, messages: List[str]) -> bool:
+        """Send every message to every configured group."""
+        group_ids = self._get_target_group_ids()
+        if not group_ids:
+            logger.error("No group IDs found in group_id!A2:A or environment.")
+            return False
+
+        all_sent = True
+        for group_id in group_ids:
+            logger.info(f"Sending {len(messages)} message(s) to SeaTalk group {group_id}...")
+            for message in messages:
+                result = self.seatalk_client.send_text_message(
+                    group_id,
+                    message,
+                    format_type=1
+                )
+                if not result:
+                    logger.error(f"Failed to send alert to group {group_id}.")
+                    all_sent = False
+        return all_sent
     
     def _get_single_value(self, range_name: str, default: str = "") -> str:
         """Get a single cell value."""
@@ -477,18 +572,24 @@ cc: {mentions}"""
             ops_id_1, 
             ops_id_2
         )
-        
-        logger.info("Sending message to SeaTalk group...")
-        result = self.seatalk_client.send_text_message(
-            self.group_id, 
-            message,
-            format_type=1
+        messages = [message]
+
+        no_breaktime_scan_message = self._build_range_message(
+            "No Breaktime Scan in FMS Workstation",
+            self.NO_BREAKTIME_SCAN_RANGE
         )
+        messages.append(no_breaktime_scan_message)
+
+        ongoing_breaktime_message = self._build_range_message(
+            "Ongoing Breaktime",
+            self.ONGOING_BREAKTIME_RANGE
+        )
+        messages.append(ongoing_breaktime_message)
         
-        if result:
-            logger.info("Alert sent successfully!")
+        if self._send_messages_to_all_groups(messages):
+            logger.info("Alerts sent successfully!")
         else:
-            logger.error("Failed to send alert.")
+            logger.error("One or more alerts failed to send.")
 
 
 def run_scheduler():
